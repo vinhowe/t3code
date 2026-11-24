@@ -47,8 +47,9 @@ name="$(basename "$built")"
 installed="/Applications/$name"
 
 # pgrep -x misses truncated macOS process names and pgrep -f reads "(Beta)" as a regex, so
-# match the executable path (comm, which also leaves out this grep) literally.
-running() { ps -axo comm= | grep -qF "$installed/Contents/"; }
+# match the executable path (comm, which also leaves out this grep) literally. Not grep -q:
+# under pipefail its early exit fails the pipeline with ps's SIGPIPE.
+running() { ps -axo comm= | grep -F "$installed/Contents/" >/dev/null; }
 if running; then
   echo "quitting $name"
   osascript -e "quit app \"${name%.app}\"" || true
