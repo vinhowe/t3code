@@ -140,16 +140,38 @@ function searchDecorations(state: EditorState, query: RegExp): Decoration[] {
     );
 }
 
+const BLOCK_CURSOR_CLASS = "rounded-[1px] bg-foreground text-background";
+
+/** Fills one cell on an empty line or at the end, where no character can carry the block. */
+function emptyCellCursor(view: EditorView): HTMLElement {
+  const cell = view.dom.ownerDocument.createElement("span");
+  // A negative margin keeps the cell out of line wrapping, as a drawn cursor would be.
+  cell.className = `pointer-events-none inline-block h-[1lh] w-[1ch] -mr-[1ch] align-top ${BLOCK_CURSOR_CLASS}`;
+  cell.dataset.composerVimCursor = "";
+  cell.setAttribute("aria-hidden", "true");
+  return cell;
+}
+
 function cursorDecoration(state: EditorState): Decoration[] {
   const flat = flattenComposerVimDocument(state.doc);
   const cursor = composerVimFlatOffset(flat, state.selection.head);
   const character = flat.text[cursor];
-  if (character === undefined || character === "\n") return [];
+  if (character === undefined || character === "\n") {
+    // Before a hard break, not after it, which would draw on the next line.
+    return [
+      Decoration.widget(flat.positions[cursor] ?? state.selection.head, emptyCellCursor, {
+        side: -1,
+        key: "composer-vim-cursor",
+        ignoreSelection: true,
+      }),
+    ];
+  }
   const segment = graphemes.segment(flat.text).containing(cursor);
   const end = segment ? segment.index + segment.segment.length : cursor + 1;
   return [
     Decoration.inline(flat.positions[cursor]!, flat.positions[end]!, {
-      class: "rounded-[1px] bg-foreground text-background",
+      class: BLOCK_CURSOR_CLASS,
+      "data-composer-vim-cursor": "",
     }),
   ];
 }
@@ -220,6 +242,11 @@ export const ComposerVimExtension = Extension.create({
           },
         },
         props: {
+          // The block replaces the native caret everywhere but insert and replace modes.
+          attributes(state): Record<string, string> {
+            const mode = composerVimKeyName.getState(state)?.mode ?? "insert";
+            return mode === "insert" || mode === "replace" ? {} : { class: "caret-transparent" };
+          },
           decorations(state) {
             const plugin = composerVimKeyName.getState(state);
             if (!plugin || (plugin.mode === "insert" && !plugin.search)) return null;
