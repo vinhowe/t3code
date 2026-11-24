@@ -46,14 +46,17 @@ built="$(find release -maxdepth 2 -name '*.app' -type d -print -quit)"
 name="$(basename "$built")"
 installed="/Applications/$name"
 
-if pgrep -xq "${name%.app}"; then
+# pgrep -x misses truncated macOS process names and pgrep -f reads "(Beta)" as a regex, so
+# match the executable path (comm, which also leaves out this grep) literally.
+running() { ps -axo comm= | grep -qF "$installed/Contents/"; }
+if running; then
   echo "quitting $name"
   osascript -e "quit app \"${name%.app}\"" || true
   for _ in $(seq 1 30); do
-    pgrep -xq "${name%.app}" || break
+    running || break
     sleep 1
   done
-  if pgrep -xq "${name%.app}"; then
+  if running; then
     echo "$name is still running; quit it and run this again" >&2
     exit 1
   fi
