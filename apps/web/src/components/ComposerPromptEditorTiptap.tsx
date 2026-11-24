@@ -55,7 +55,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 
 import {
   clampCollapsedComposerCursor,
@@ -153,7 +153,21 @@ import {
   captureComposerAttachmentInsertion,
   type ComposerAttachmentInsertion,
 } from "./composerAttachmentInsertion";
+import {
+  ComposerVimExtension,
+  type ComposerVimMode,
+  enableComposerVim,
+  handleComposerVimKeyDown,
+  readComposerVimMode,
+} from "~/composer-vim-editor";
 import type { ComposerDraftContextRecords } from "./composerContextPresentation";
+
+const COMPOSER_VIM_MODE_LABELS: Record<Exclude<ComposerVimMode, "insert">, string> = {
+  normal: "NORMAL",
+  visual: "VISUAL",
+  "visual line": "V-LINE",
+  replace: "REPLACE",
+};
 
 export interface ComposerPromptEditorHandle {
   focus: () => void;
@@ -176,6 +190,7 @@ export interface ComposerPromptEditorProps {
   value: string;
   cursor: number;
   richTextEnabled?: boolean;
+  vimModeEnabled?: boolean;
   literalText?: boolean;
   contextRecords: ComposerDraftContextRecords;
   buildContextClipboardFragment?:
@@ -885,6 +900,7 @@ function createComposerExtensions(richText: boolean) {
     // Ctrl/Cmd+click would node-select and outline the whole line (Wispr Flow holds Ctrl to dictate).
     Paragraph.extend({ selectable: false }),
     ComposerUndoGroupingExtension,
+    ComposerVimExtension,
     ComposerTextDirectionExtension,
     ComposerMentionExtension,
     ComposerSkillExtension,
@@ -981,6 +997,7 @@ function ComposerPromptEditorTiptapInner(
     value,
     cursor,
     richTextEnabled,
+    vimModeEnabled,
     literalText = false,
     contextRecords,
     buildContextClipboardFragment,
@@ -1120,6 +1137,7 @@ function ComposerPromptEditorTiptapInner(
     const suppressTrigger =
       literalText ||
       inCodeBlock ||
+      readComposerVimMode(updated.state) !== "insert" ||
       [updated.state.selection.$from.nodeBefore, updated.state.selection.$from.nodeAfter].some(
         (node) => node?.isInline && node.isAtom && !node.isText && node.type.name !== "hardBreak",
       );
@@ -1295,6 +1313,25 @@ function ComposerPromptEditorTiptapInner(
           },
         },
         handleKeyDown: (view, event) => {
+          if (
+            handleComposerVimKeyDown(
+              view,
+              event,
+              () => readCallbacks().onCommandKeyDown?.("Escape", event) ?? false,
+            )
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          // Normal mode never edits on Enter: it sends or does nothing. The item flag makes the
+          // handler leave list continuation to the caller, which is what stops here.
+          if (event.key === "Enter" && readComposerVimMode(view.state) !== "insert") {
+            readCallbacks().onCommandKeyDown?.("Enter", event, true);
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
           // In a right-to-left line the start is on the right.
           const backArrow = caretLineDirection(view.state) === "rtl" ? "ArrowRight" : "ArrowLeft";
           const boundary = event.metaKey
@@ -1435,6 +1472,7 @@ function ComposerPromptEditorTiptapInner(
             event.key === "Tab" &&
             !event.metaKey &&
             !event.ctrlKey &&
+            readComposerVimMode(view.state) === "insert" &&
             selectionInOneCodeBlock(view.state)
           ) {
             event.preventDefault();
@@ -1517,6 +1555,7 @@ function ComposerPromptEditorTiptapInner(
           return handled;
         },
         handleTextInput: (view, from, to, text) => {
+          if (readComposerVimMode(view.state) !== "insert") return true;
           if (literalText || view.composing || text.length !== 1) return false;
           const closer = SURROUND_CLOSE[text];
           const { selection } = view.state;
@@ -1621,6 +1660,17 @@ function ComposerPromptEditorTiptapInner(
     },
     [],
   );
+
+  const vimMode = useEditorState({
+    editor,
+    selector: ({ editor: current }) => (current ? readComposerVimMode(current.state) : "insert"),
+  });
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- attaches the lazily loaded vim engine to the imperative Tiptap editor, and detaches it so typing works again
+  useEffect(() => {
+    if (!vimModeEnabled || !editor) return;
+    return enableComposerVim(editor.view);
+  }, [vimModeEnabled, editor]);
 
   const resumeEditingFocusRef = useRef(false);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- preserves native selection focus across temporarily making the editor read-only for dictation
@@ -2030,6 +2080,14 @@ function ComposerPromptEditorTiptapInner(
               onCopyCapture={(event) => handleCopyCut(event, false)}
               onCutCapture={(event) => handleCopyCut(event, true)}
             />
+            {vimMode !== "insert" ? (
+              <span
+                role="status"
+                className="pointer-events-none absolute right-0 bottom-0 bg-background px-1 font-mono text-3xs text-muted-foreground"
+              >
+                {COMPOSER_VIM_MODE_LABELS[vimMode]}
+              </span>
+            ) : null}
             {isEmpty && contextRecords.size === 0 && placeholder ? (
               <div
                 className={cn(

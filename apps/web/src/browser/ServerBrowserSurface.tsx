@@ -825,6 +825,7 @@ export function ServerBrowserSurface(props: {
         {/* Pin top-left to avoid focus scrolling; 16px prevents iOS focus zoom. */}
         <textarea
           ref={inputRef}
+          data-vim-ignore=""
           aria-label={gt("Browser page")}
           aria-description={gt("Press Shift+Escape to leave the browser page.")}
           autoCapitalize="off"
