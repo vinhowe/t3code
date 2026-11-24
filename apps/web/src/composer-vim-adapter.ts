@@ -584,9 +584,15 @@ export class ComposerVimEditor extends VimEditor {
   /** g0 and g$ stop at the wrap, not the line break. */
   protected moveToVisualLineEdge(end: boolean) {
     const bounds = this.bounds();
+    // Probe inside the content box: a point in the editor's padding maps to no line.
+    const style = getComputedStyle(this.view.dom);
+    const contentLeft =
+      bounds.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+    const contentRight =
+      bounds.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
     const coords = this.view.coordsAtPos(this.view.state.selection.head);
     const found = this.view.posAtCoords({
-      left: end ? bounds.right - 1 : bounds.left + 1,
+      left: end ? contentRight - 1 : contentLeft + 1,
       top: (coords.top + coords.bottom) / 2,
     });
     if (!found) return;

@@ -1709,7 +1709,8 @@ describe("vim mode", () => {
       "{Escape}Gddatail",
       "first para\ntail",
     ],
-    ["stays outside a list", "- a\n- b\n\nlast", "{Escape}Gdd", "- a\n- b\n"],
+    // The blank line after a list is a separator, not a paragraph, so nothing is left after it.
+    ["stays outside a list", "- a\n- b\n\nlast", "{Escape}Gdd", "- a\n- b"],
   ])("dd on the last line %s", async (_name, value, keys, expected) => {
     await using screen = await mountVim(value);
     await userEvent.keyboard(keys);
