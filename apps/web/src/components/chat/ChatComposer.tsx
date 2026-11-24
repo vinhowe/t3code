@@ -3923,6 +3923,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         : gt("Message", { $context: "noun, label of the message input" })
                     }
                     suggestionListId={composerSuggestionListId}
+                    suggestionsOpen={composerMenuOpen}
                     activeSuggestionId={
                       composerSuggestionListVisible && activeComposerMenuItem
                         ? composerSuggestionOptionId(

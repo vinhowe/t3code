@@ -206,6 +206,7 @@ export interface ComposerPromptEditorProps {
   placeholderSuffix?: ReactNode;
   ariaLabel?: string | undefined;
   suggestionListId?: string | undefined;
+  suggestionsOpen?: boolean | undefined;
   activeSuggestionId?: string | undefined;
   isPathQueryActive?: () => boolean;
   containerClassName?: string;
@@ -1007,6 +1008,7 @@ function ComposerPromptEditorTiptapInner(
     placeholder,
     ariaLabel,
     suggestionListId,
+    suggestionsOpen,
     activeSuggestionId,
     isPathQueryActive,
     containerClassName,
@@ -1167,6 +1169,7 @@ function ComposerPromptEditorTiptapInner(
       ? {
           "aria-autocomplete": "list",
           "aria-haspopup": "listbox",
+          "aria-expanded": suggestionsOpen ? "true" : "false",
           ...(activeSuggestionId
             ? {
                 "aria-controls": suggestionListId,
